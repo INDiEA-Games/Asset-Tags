@@ -1,0 +1,58 @@
+{
+    "tags": [
+        {
+            "tagName": "Setting",
+            "colorR": 0.0,
+            "colorG": 0.3832608163356781,
+            "colorB": 0.9150943160057068,
+            "colorA": 1.0,
+            "lastModifiedAtUtc": "",
+            "lastModifiedBy": ""
+        },
+        {
+            "tagName": "Document",
+            "colorR": 0.6320754289627075,
+            "colorG": 0.40898945927619936,
+            "colorB": 0.17690156400203706,
+            "colorA": 1.0,
+            "lastModifiedAtUtc": "",
+            "lastModifiedBy": ""
+        },
+        {
+            "tagName": "Script",
+            "colorR": 0.29592373967170718,
+            "colorG": 0.5583456754684448,
+            "colorB": 0.9905660152435303,
+            "colorA": 1.0,
+            "lastModifiedAtUtc": "",
+            "lastModifiedBy": ""
+        },
+        {
+            "tagName": "Library",
+            "colorR": 0.6388086676597595,
+            "colorG": 0.7882353067398071,
+            "colorB": 0.0,
+            "colorA": 1.0,
+            "lastModifiedAtUtc": "",
+            "lastModifiedBy": ""
+        },
+        {
+            "tagName": "Editor",
+            "colorR": 0.0,
+            "colorG": 0.6792452931404114,
+            "colorB": 0.012422453612089157,
+            "colorA": 1.0,
+            "lastModifiedAtUtc": "",
+            "lastModifiedBy": ""
+        },
+        {
+            "tagName": "Texture",
+            "colorR": 0.8853462934494019,
+            "colorG": 0.6889688372612,
+            "colorB": 0.0000011392688747946523,
+            "colorA": 1.0,
+            "lastModifiedAtUtc": "",
+            "lastModifiedBy": ""
+        }
+    ]
+}
