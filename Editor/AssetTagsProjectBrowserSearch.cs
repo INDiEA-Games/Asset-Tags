@@ -40,7 +40,7 @@ namespace INDiEA.AssetTags
                     typeof(Editor).Assembly.GetType("UnityEditor.SearchService.ProjectSearchSessionHandler");
                 if (sessionType == null)
                 {
-                    LogDiagnosticWarningOnce(
+                    LogDebugWarningOnce(
                         ref warnedSearchPatchFailure,
                         "[AssetTags] Failed to patch project search: ProjectSearchSessionHandler type was not found.");
                     return;
@@ -54,7 +54,7 @@ namespace INDiEA.AssetTags
                     null);
                 if (search == null)
                 {
-                    LogDiagnosticWarningOnce(
+                    LogDebugWarningOnce(
                         ref warnedSearchPatchFailure,
                         "[AssetTags] Failed to patch project search: Search method was not found.");
                     return;
@@ -68,7 +68,7 @@ namespace INDiEA.AssetTags
                     BindingFlags.Static | BindingFlags.NonPublic);
                 if (prefix == null || postfix == null)
                 {
-                    LogDiagnosticWarningOnce(
+                    LogDebugWarningOnce(
                         ref warnedSearchPatchFailure,
                         "[AssetTags] Failed to patch project search: prefix/postfix methods were not found.");
                     return;
@@ -82,7 +82,7 @@ namespace INDiEA.AssetTags
                     ?? Type.GetType("HarmonyLib.HarmonyMethod, HarmonyLib");
                 if (harmonyType == null || harmonyMethodType == null)
                 {
-                    LogDiagnosticWarningOnce(
+                    LogDebugWarningOnce(
                         ref warnedSearchPatchFailure,
                         "[AssetTags] Harmony was not found. Project search tag injection is disabled.");
                     return;
@@ -98,7 +98,7 @@ namespace INDiEA.AssetTags
                     null);
                 if (harmonyCtor == null || harmonyMethodCtor == null || patch == null)
                 {
-                    LogDiagnosticWarningOnce(
+                    LogDebugWarningOnce(
                         ref warnedSearchPatchFailure,
                         "[AssetTags] Harmony patch API was not found. Project search tag injection is disabled.");
                     return;
@@ -112,7 +112,7 @@ namespace INDiEA.AssetTags
             }
             catch (Exception exception)
             {
-                LogDiagnosticWarningOnce(
+                LogDebugWarningOnce(
                     ref warnedSearchPatchFailure,
                     "[AssetTags] Exception while patching project search. Tag injection is disabled.",
                     exception);
@@ -128,15 +128,15 @@ namespace INDiEA.AssetTags
             settingsCache = AssetDatabase.LoadAssetAtPath<AssetTagsSettings>(AssetTagsManager.SettingsAssetPath);
         }
 
-        static bool IsDiagnosticLogEnabled()
+        static bool IsDebugLogEnabled()
         {
             EnsureSettingsLoaded();
-            return settingsCache != null && settingsCache.EnableDiagnosticLogs;
+            return settingsCache != null && settingsCache.EnableDebugLogs;
         }
 
-        static void LogDiagnosticWarningOnce(ref bool warned, string message, Exception exception = null)
+        static void LogDebugWarningOnce(ref bool warned, string message, Exception exception = null)
         {
-            if (warned || !IsDiagnosticLogEnabled())
+            if (warned || !IsDebugLogEnabled())
                 return;
             warned = true;
             if (exception == null)

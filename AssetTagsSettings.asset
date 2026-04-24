@@ -13,4 +13,6 @@ MonoBehaviour:
   m_Name: AssetTagsSettings
   m_EditorClassIdentifier: 
   overrideProjectBrowserToolbar: 1
-  enableDiagnosticLogs: 1
+  enableDebugLogs: 1
+  indexingSearchAfterTagChanges: 1
+  mergeDeletedTagRecords: 1

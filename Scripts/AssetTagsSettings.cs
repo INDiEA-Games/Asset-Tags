@@ -1,17 +1,21 @@
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace INDiEA.AssetTags
 {
     public sealed class AssetTagsSettings : ScriptableObject
     {
         [SerializeField]
-        [FormerlySerializedAs("showProjectBrowserToolbar")]
         bool overrideProjectBrowserToolbar = true;
         [SerializeField]
-        bool enableDiagnosticLogs = true;
+        bool indexingSearchAfterTagChanges = true;
+        [SerializeField]
+        bool mergeDeletedTagRecords = true;
+        [SerializeField]
+        bool enableDebugLogs = true;
 
         public bool OverrideProjectBrowserToolbar => overrideProjectBrowserToolbar;
-        public bool EnableDiagnosticLogs => enableDiagnosticLogs;
+        public bool IndexingSearchAfterTagChanges => indexingSearchAfterTagChanges;
+        public bool MergeDeletedTagRecords => mergeDeletedTagRecords;
+        public bool EnableDebugLogs => enableDebugLogs;
     }
 }

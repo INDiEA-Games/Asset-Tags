@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Security.Cryptography;
+using System.Threading;
 using UnityEngine;
 
 namespace INDiEA.AssetTags
@@ -15,11 +16,6 @@ namespace INDiEA.AssetTags
         public class Document
         {
             public string clientId;
-
-            public string clientGuid;
-
-            public string workstationId;
-            public string workstationGuid;
         }
 
         static string ProjectRootFull =>
@@ -34,43 +30,11 @@ namespace INDiEA.AssetTags
         public static string ClientJsonFullPath =>
             Path.Combine(GlobalDataDirFull, "ClientId.json");
 
-        static string LegacyClientJsonAtProjectRootFull =>
-            Path.Combine(ProjectRootFull, "ClientId.json");
-
-        static string LegacyClientJsonAtLibraryRootFull =>
-            Path.Combine(UnityLibraryFull, "ClientId.json");
-
-        static void TryMigrateClientIdToGlobalDataDir()
-        {
-            try
-            {
-                if (File.Exists(ClientJsonFullPath))
-                    return;
-                var dir = Path.GetDirectoryName(ClientJsonFullPath);
-                if (!string.IsNullOrEmpty(dir))
-                    Directory.CreateDirectory(dir);
-
-                if (File.Exists(LegacyClientJsonAtLibraryRootFull))
-                {
-                    File.Copy(LegacyClientJsonAtLibraryRootFull, ClientJsonFullPath, false);
-                    return;
-                }
-
-                if (File.Exists(LegacyClientJsonAtProjectRootFull))
-                {
-                    File.Copy(LegacyClientJsonAtProjectRootFull, ClientJsonFullPath, false);
-                    return;
-                }
-            }
-            catch{}
-        }
-
         static string LocalDataDirFull =>
-            Path.GetFullPath(Path.Combine(Application.dataPath, "INDiEA", "Asset Tags", "Data"));
+            AssetTagsManager.AssetPathToFullPathOnDisk(AssetTagsJsonRepository.LocalDataFolderAssetPath);
 
         public static string GetOrCreateClientId()
         {
-            TryMigrateClientIdToGlobalDataDir();
             var path = ClientJsonFullPath;
             try
             {
@@ -82,16 +46,6 @@ namespace INDiEA.AssetTags
                         return CreateAndPersistNewShortId();
 
                     if (TryNormalizeShortId(doc.clientId, out var shortId))
-                        return shortId;
-
-                    if (TryNormalizeFullGuid(doc.clientGuid, out var full32))
-                    {
-                        var derived = full32.Substring(0, ShortIdLength);
-                        WriteShortIdDocument(derived);
-                        return derived;
-                    }
-
-                    if (TryNormalizeShortId(doc.clientGuid, out shortId))
                         return shortId;
                 }
             }
@@ -142,7 +96,65 @@ namespace INDiEA.AssetTags
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
             var json = JsonUtility.ToJson(new Document { clientId = id }, true);
-            File.WriteAllText(ClientJsonFullPath, json);
+            WriteAllTextAtomic(ClientJsonFullPath, json);
+        }
+
+        static void WriteAllTextAtomic(string fullPath, string contents)
+        {
+            var dir = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+
+            var tempPath = fullPath + ".tmp." + Guid.NewGuid().ToString("N");
+            try
+            {
+                File.WriteAllText(tempPath, contents);
+                const int maxAttempts = 3;
+                for (var attempt = 0; attempt < maxAttempts; attempt++)
+                {
+                    try
+                    {
+                        if (File.Exists(fullPath))
+                        {
+                            try
+                            {
+                                File.Replace(tempPath, fullPath, null, true);
+                                return;
+                            }
+                            catch (IOException)
+                            {
+                                File.Copy(tempPath, fullPath, true);
+                                return;
+                            }
+                        }
+
+                        File.Move(tempPath, fullPath);
+                        return;
+                    }
+                    catch (IOException) when (attempt < maxAttempts - 1)
+                    {
+                        Thread.Sleep(15 * (attempt + 1));
+                    }
+                    catch (UnauthorizedAccessException) when (attempt < maxAttempts - 1)
+                    {
+                        Thread.Sleep(15 * (attempt + 1));
+                    }
+                }
+
+                if (File.Exists(fullPath))
+                    File.Copy(tempPath, fullPath, true);
+                else
+                    File.Move(tempPath, fullPath);
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+                catch {}
+            }
         }
 
         public static bool TryNormalizeShortId(string raw, out string idLower)
@@ -168,26 +180,6 @@ namespace INDiEA.AssetTags
             }
 
             idLower = s;
-            return true;
-        }
-
-        static bool TryNormalizeFullGuid(string raw, out string token32Lower)
-        {
-            token32Lower = null;
-            if (string.IsNullOrWhiteSpace(raw))
-                return false;
-            var s = raw.Trim().Replace("-", string.Empty).ToLowerInvariant();
-            if (s.Length != 32)
-                return false;
-            for (var i = 0; i < s.Length; i++)
-            {
-                var c = s[i];
-                if (c >= '0' && c <= '9' || c >= 'a' && c <= 'f')
-                    continue;
-                return false;
-            }
-
-            token32Lower = s;
             return true;
         }
     }

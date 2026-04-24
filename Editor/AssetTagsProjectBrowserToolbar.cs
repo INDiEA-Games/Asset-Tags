@@ -143,7 +143,7 @@ namespace INDiEA.AssetTags
                     BindingFlags.Instance | BindingFlags.NonPublic);
                 if (topToolbar == null)
                 {
-                    LogDiagnosticWarningOnce(
+                    LogDebugWarningOnce(
                         ref warnedTopToolbarPatchFailure,
                         "[AssetTags] Failed to patch ProjectBrowser.TopToolbar: method was not found. Toolbar overlay will be disabled.");
                     return;
@@ -154,7 +154,7 @@ namespace INDiEA.AssetTags
                     BindingFlags.Static | BindingFlags.NonPublic);
                 if (prefix == null)
                 {
-                    LogDiagnosticWarningOnce(
+                    LogDebugWarningOnce(
                         ref warnedTopToolbarPatchFailure,
                         "[AssetTags] Failed to patch ProjectBrowser.TopToolbar: prefix method was not found.");
                     return;
@@ -168,7 +168,7 @@ namespace INDiEA.AssetTags
                     ?? Type.GetType("HarmonyLib.HarmonyMethod, HarmonyLib");
                 if (harmonyType == null || harmonyMethodType == null)
                 {
-                    LogDiagnosticWarningOnce(
+                    LogDebugWarningOnce(
                         ref warnedTopToolbarPatchFailure,
                         "[AssetTags] Harmony was not found. Project toolbar patch is disabled.");
                     return;
@@ -184,7 +184,7 @@ namespace INDiEA.AssetTags
                     null);
                 if (harmonyCtor == null || harmonyMethodCtor == null || patchMethod == null)
                 {
-                    LogDiagnosticWarningOnce(
+                    LogDebugWarningOnce(
                         ref warnedTopToolbarPatchFailure,
                         "[AssetTags] Harmony patch API was not found. Project toolbar patch is disabled.");
                     return;
@@ -199,7 +199,7 @@ namespace INDiEA.AssetTags
             catch (Exception exception)
             {
                 harmonyTopToolbarPatched = false;
-                LogDiagnosticWarningOnce(
+                LogDebugWarningOnce(
                     ref warnedTopToolbarPatchFailure,
                     "[AssetTags] Exception while patching ProjectBrowser.TopToolbar. Falling back to native toolbar.",
                     exception);
@@ -365,15 +365,15 @@ namespace INDiEA.AssetTags
             return settingsCache.OverrideProjectBrowserToolbar;
         }
 
-        static bool IsDiagnosticLogEnabled()
+        static bool IsDebugLogEnabled()
         {
             EnsureSettingsLoaded();
-            return settingsCache != null && settingsCache.EnableDiagnosticLogs;
+            return settingsCache != null && settingsCache.EnableDebugLogs;
         }
 
-        static void LogDiagnosticWarningOnce(ref bool warned, string message, Exception exception = null)
+        static void LogDebugWarningOnce(ref bool warned, string message, Exception exception = null)
         {
-            if (warned || !IsDiagnosticLogEnabled())
+            if (warned || !IsDebugLogEnabled())
                 return;
             warned = true;
             if (exception == null)
@@ -609,7 +609,7 @@ namespace INDiEA.AssetTags
                 if (tie.InnerException is ExitGUIException exitGui)
                     throw exitGui;
                 forceNativeToolbarFallback = true;
-                LogDiagnosticWarningOnce(
+                LogDebugWarningOnce(
                     ref warnedToolbarReflectionFallback,
                     "[AssetTags] Toolbar reflection call failed. Falling back to simplified toolbar.",
                     tie.InnerException ?? tie);
@@ -622,7 +622,7 @@ namespace INDiEA.AssetTags
             catch (Exception exception)
             {
                 forceNativeToolbarFallback = true;
-                LogDiagnosticWarningOnce(
+                LogDebugWarningOnce(
                     ref warnedToolbarReflectionFallback,
                     "[AssetTags] Toolbar reflection call failed. Falling back to simplified toolbar.",
                     exception);
