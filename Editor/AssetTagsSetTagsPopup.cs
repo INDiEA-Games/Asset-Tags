@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -10,9 +11,10 @@ namespace INDiEA.AssetTags
     {
         static class PopupUiLayout
         {
-            public const float Width = 240f;
+            public const float MinWidth = 240f;
+            public const float MaxWidth = 420f;
             public const float MaxHeight = 320f;
-            public const float MinHeight = 120f;
+            public const float MinHeight = 200f;
 
             public const float TopPadding = 4f;
             public const float TopHorizontalPadding = 4f;
@@ -28,6 +30,7 @@ namespace INDiEA.AssetTags
             public const float ActionSpacing = 1f;
             public const float SearchAddSpacing = 1f;
             public const float PopupOffsetY = 2f;
+            public const float WidthSafetyPadding = 8f;
 
             public static readonly Color IconColor = new Color(0.82f, 0.82f, 0.82f, 1f);
             public static readonly Color IconHoverColor = Color.white;
@@ -43,6 +46,8 @@ namespace INDiEA.AssetTags
         ReorderableList tagList;
         Vector2 listScroll;
         string searchText = string.Empty;
+
+        string cachedSearchForVisibleTagList;
 
         int editingTagIndex = -1;
         string editingTagName = string.Empty;
@@ -71,7 +76,7 @@ namespace INDiEA.AssetTags
             PopupWindow.Show(anchor, new AssetTagsSetTagsPopup(guids));
         }
 
-        public override Vector2 GetWindowSize() => new Vector2(PopupUiLayout.Width, CalculateHeight());
+        public override Vector2 GetWindowSize() => new Vector2(CalculateWidth(), CalculateHeight());
 
         public override void OnOpen()
         {
@@ -101,6 +106,33 @@ namespace INDiEA.AssetTags
             return Mathf.Clamp(height, PopupUiLayout.MinHeight, PopupUiLayout.MaxHeight);
         }
 
+        float CalculateWidth()
+        {
+            var tags = allTags != null && allTags.Count > 0
+                ? allTags
+                : AssetTagsManager.Instance.GetAllAvailableTags();
+
+            var maxTagWidth = 0f;
+            for (var i = 0; i < tags.Count; i++)
+            {
+                AssetTagsTagStyle.GetTagDimensions(tags[i], out var tagWidth, out _);
+                maxTagWidth = Mathf.Max(maxTagWidth, tagWidth);
+            }
+
+            var rowActionsWidth =
+                PopupUiLayout.ToggleWidth +
+                4f +
+                PopupUiLayout.ActionWidth * 4f +
+                PopupUiLayout.ActionSpacing * 3f;
+            var listChromeWidth =
+                PopupUiLayout.ListHorizontalPadding * 2f +
+                GetScrollbarWidth() +
+                PopupUiLayout.WidthSafetyPadding;
+            var desiredWidth = maxTagWidth + rowActionsWidth + listChromeWidth;
+
+            return Mathf.Clamp(desiredWidth, PopupUiLayout.MinWidth, PopupUiLayout.MaxWidth);
+        }
+
         int GetVisibleTagCount()
         {
             if (allTags == null || allTags.Count == 0)
@@ -127,7 +159,17 @@ namespace INDiEA.AssetTags
                 Mathf.Max(1f, rowRect.width - addWidth - PopupUiLayout.SearchAddSpacing),
                 controlHeight);
 
-            GUI.SetNextControlName("AssetTagsSetTagsPopupSearch");
+            const string searchControlName = "AssetTagsSetTagsPopupSearch";
+            var evt = Event.current;
+            if (evt.type == EventType.KeyDown
+                && (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                && GUI.GetNameOfFocusedControl() == searchControlName)
+            {
+                AddTagFromSearch();
+                evt.Use();
+            }
+
+            GUI.SetNextControlName(searchControlName);
             searchText = EditorGUI.TextField(searchRect, searchText, EditorStyles.toolbarSearchField);
 
             var previousColor = GUI.contentColor;
@@ -136,13 +178,6 @@ namespace INDiEA.AssetTags
                 AddTagFromSearch();
             GUI.contentColor = previousColor;
 
-            if (Event.current.type == EventType.KeyDown
-                && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter)
-                && GUI.GetNameOfFocusedControl() == "AssetTagsSetTagsPopupSearch")
-            {
-                AddTagFromSearch();
-                Event.current.Use();
-            }
         }
 
         float GetScrollbarWidth()
@@ -157,7 +192,11 @@ namespace INDiEA.AssetTags
         void DrawTagList()
         {
             EnsureList();
-            UpdateVisibleTags();
+            if (!string.Equals(searchText, cachedSearchForVisibleTagList, StringComparison.Ordinal))
+            {
+                cachedSearchForVisibleTagList = searchText;
+                UpdateVisibleTags();
+            }
 
             GUILayout.BeginHorizontal();
             GUILayout.Space(PopupUiLayout.ListHorizontalPadding);
@@ -181,6 +220,7 @@ namespace INDiEA.AssetTags
                 headerHeight = 0f,
                 footerHeight = 0f,
             };
+            tagList.draggable = true;
         }
 
         float GetListElementHeight(int index)
@@ -236,6 +276,26 @@ namespace INDiEA.AssetTags
             {
                 var controlName = $"AssetTagsSetTagsPopupRename_{globalIndex}";
                 GUI.SetNextControlName(controlName);
+
+                var evt = Event.current;
+                if (evt.type == EventType.KeyDown && GUI.GetNameOfFocusedControl() == controlName)
+                {
+                    if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                    {
+                        editingTagName = EditorGUI.TextField(rect, editingTagName);
+                        CommitRename(globalIndex);
+                        evt.Use();
+                        return;
+                    }
+
+                    if (evt.keyCode == KeyCode.Escape)
+                    {
+                        CancelRename();
+                        evt.Use();
+                        return;
+                    }
+                }
+
                 var next = EditorGUI.TextField(rect, editingTagName);
                 if (next != editingTagName)
                     editingTagName = next;
@@ -246,20 +306,6 @@ namespace INDiEA.AssetTags
                     focusRenameField = false;
                 }
 
-                if (Event.current.type == EventType.KeyDown)
-                {
-                    if (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter)
-                    {
-                        CommitRename(globalIndex);
-                        Event.current.Use();
-                    }
-                    else if (Event.current.keyCode == KeyCode.Escape)
-                    {
-                        CancelRename();
-                        Event.current.Use();
-                    }
-                }
-
                 if (Event.current.type == EventType.MouseDown && !rect.Contains(Event.current.mousePosition))
                     CommitRename(globalIndex);
 
@@ -267,13 +313,16 @@ namespace INDiEA.AssetTags
             }
 
             var color = AssetTagsManager.Instance.GetTagColor(tag);
-            AssetTagsTagStyle.GetTagDimensions(tag, out var tagWidth, out _);
+            var displayTag = GetDisplayTagForWidth(tag, rect.width);
+            AssetTagsTagStyle.GetTagDimensions(displayTag, out var tagWidth, out _);
             var chipRect = new Rect(
                 rect.x,
                 rect.y + Mathf.Max(0f, (rect.height - chipHeight) * 0.5f),
                 Mathf.Min(tagWidth, rect.width),
                 chipHeight);
-            AssetTagsTagStyle.DrawTintedTag(chipRect, tag, color);
+            AssetTagsTagStyle.DrawTintedTag(chipRect, displayTag, color);
+            if (!string.Equals(displayTag, tag, StringComparison.Ordinal))
+                GUI.Label(chipRect, new GUIContent(string.Empty, tag), GUIStyle.none);
 
             if (Event.current.type == EventType.MouseDown
                 && Event.current.clickCount == 2
@@ -282,6 +331,31 @@ namespace INDiEA.AssetTags
                 BeginRename(globalIndex);
                 Event.current.Use();
             }
+        }
+
+        static string GetDisplayTagForWidth(string tag, float maxWidth)
+        {
+            if (string.IsNullOrEmpty(tag) || maxWidth <= 0f)
+                return string.Empty;
+
+            AssetTagsTagStyle.GetTagDimensions(tag, out var fullWidth, out _);
+            if (fullWidth <= maxWidth)
+                return tag;
+
+            const string ellipsis = "\u2026";
+            AssetTagsTagStyle.GetTagDimensions(ellipsis, out var ellipsisWidth, out _);
+            if (ellipsisWidth > maxWidth)
+                return string.Empty;
+
+            for (var length = tag.Length - 1; length >= 1; length--)
+            {
+                var clipped = tag.Substring(0, length) + ellipsis;
+                AssetTagsTagStyle.GetTagDimensions(clipped, out var clippedWidth, out _);
+                if (clippedWidth <= maxWidth)
+                    return clipped;
+            }
+
+            return ellipsis;
         }
 
         void DrawToggle(string tag, Rect rect)
@@ -296,13 +370,10 @@ namespace INDiEA.AssetTags
             if (!EditorGUI.EndChangeCheck())
                 return;
 
-            for (var i = 0; i < targetGuids.Length; i++)
-            {
-                if (next)
-                    AssetTagsManager.Instance.AddTag(targetGuids[i], tag);
-                else
-                    AssetTagsManager.Instance.RemoveTag(targetGuids[i], tag);
-            }
+            if (next)
+                AssetTagsManager.Instance.AddTag(targetGuids, tag);
+            else
+                AssetTagsManager.Instance.RemoveTag(targetGuids, tag);
 
             ReloadAndRepaint();
         }
@@ -310,8 +381,9 @@ namespace INDiEA.AssetTags
         void DrawColorField(string tag, Rect rect)
         {
             var current = AssetTagsManager.Instance.GetTagColor(tag);
+            EditorGUI.BeginChangeCheck();
             var next = EditorGUI.ColorField(rect, GUIContent.none, current, false, false, false);
-            if (next == current)
+            if (!EditorGUI.EndChangeCheck())
                 return;
 
             AssetTagsManager.Instance.SetTagColor(tag, next);
@@ -338,20 +410,24 @@ namespace INDiEA.AssetTags
             if (!GUI.Button(rect, DeleteIcon, ActionButtonStyle))
                 return;
 
-            var usageCount = CountAssetsUsingTag(tag);
+            var tagToDelete = tag;
+            EditorApplication.delayCall += () => ConfirmDeleteTagAfterGui(tagToDelete);
+        }
+
+        void ConfirmDeleteTagAfterGui(string tagToDelete)
+        {
+            var usageCount = CountAssetsUsingTag(tagToDelete);
             if (usageCount > 0)
             {
-                var isConfirmed = EditorUtility.DisplayDialog(
-                    "Delete Tag",
-                    $"The tag \"{tag}\" is currently used by {usageCount} asset(s).\n\nDo you want to delete this tag from all assets?",
-                    "Yes",
-                    "Cancel");
-
-                if (!isConfirmed)
+                if (!EditorUtility.DisplayDialog(
+                        "Delete Tag",
+                        $"The tag \"{tagToDelete}\" is currently used by {usageCount} asset(s).\n\nDo you want to delete this tag from all assets?",
+                        "Yes",
+                        "Cancel"))
                     return;
             }
 
-            AssetTagsManager.Instance.DeleteTag(tag);
+            AssetTagsManager.Instance.DeleteTag(tagToDelete);
             ReloadAndRepaint();
         }
 
@@ -383,8 +459,7 @@ namespace INDiEA.AssetTags
             if (string.IsNullOrEmpty(tag))
                 return;
 
-            for (var i = 0; i < targetGuids.Length; i++)
-                AssetTagsManager.Instance.AddTag(targetGuids[i], tag);
+            AssetTagsManager.Instance.AddTag(targetGuids, tag);
 
             searchText = string.Empty;
             ReloadAndRepaint();
@@ -447,23 +522,27 @@ namespace INDiEA.AssetTags
 
         void OnReorder(ReorderableList list, int oldIndex, int newIndex)
         {
-            if (oldIndex == newIndex || oldIndex < 0 || oldIndex >= visibleTags.Count)
+            if (oldIndex == newIndex || visibleTags == null)
                 return;
 
+            if (oldIndex < 0 || oldIndex >= visibleTags.Count)
+                return;
+
+            if (newIndex < 0 || newIndex >= visibleTags.Count)
+                return;
+
+            var movedTag = visibleTags[newIndex];
             if (string.IsNullOrWhiteSpace(searchText))
             {
-                var moved = visibleTags[newIndex];
-                MoveTagToIndex(moved, newIndex);
+                AssetTagsManager.Instance.MoveTagWithinOrder(movedTag, visibleTags);
             }
             else
-            {
-                ReorderWithinSearchResult(oldIndex, newIndex);
-            }
+                ReorderWithinSearchResult(oldIndex, newIndex, movedTag);
 
             ReloadAndRepaint();
         }
 
-        void ReorderWithinSearchResult(int oldIndex, int newIndex)
+        void ReorderWithinSearchResult(int oldIndex, int newIndex, string movedTag)
         {
             var changeStart = Mathf.Min(oldIndex, newIndex);
             if (changeStart < 0 || changeStart >= visibleTags.Count)
@@ -502,33 +581,12 @@ namespace INDiEA.AssetTags
             for (var i = 0; i < untouched.Count; i++)
                 targetOrder[writeIndex++] = untouched[i];
 
-            ApplyGlobalOrder(targetOrder);
+            ApplyGlobalOrder(movedTag, targetOrder);
         }
 
-        void ApplyGlobalOrder(List<string> targetOrder)
+        void ApplyGlobalOrder(string movedTag, List<string> targetOrder)
         {
-            for (var index = 0; index < targetOrder.Count; index++)
-                MoveTagToIndex(targetOrder[index], index);
-        }
-
-        void MoveTagToIndex(string tag, int targetIndex)
-        {
-            var order = AssetTagsManager.Instance.GetAllAvailableTags();
-            var currentIndex = order.IndexOf(tag);
-            if (currentIndex < 0)
-                return;
-
-            while (currentIndex > targetIndex)
-            {
-                AssetTagsManager.Instance.MoveTagUp(tag);
-                currentIndex--;
-            }
-
-            while (currentIndex < targetIndex)
-            {
-                AssetTagsManager.Instance.MoveTagDown(tag);
-                currentIndex++;
-            }
+            AssetTagsManager.Instance.MoveTagWithinOrder(movedTag, targetOrder);
         }
 
         void ReloadAndRepaint()
@@ -542,10 +600,15 @@ namespace INDiEA.AssetTags
         {
             allTags = AssetTagsManager.Instance.GetAllAvailableTags();
             RefreshSelectionState();
+            cachedSearchForVisibleTagList = searchText;
             UpdateVisibleTags();
 
             if (tagList != null)
+            {
                 tagList.list = visibleTags;
+                if (tagList.index >= visibleTags.Count)
+                    tagList.index = visibleTags.Count > 0 ? visibleTags.Count - 1 : -1;
+            }
         }
 
         void UpdateVisibleTags()
@@ -555,7 +618,11 @@ namespace INDiEA.AssetTags
                 : allTags.Where(MatchesSearch).ToList();
 
             if (tagList != null)
+            {
                 tagList.list = visibleTags;
+                if (tagList.index >= visibleTags.Count)
+                    tagList.index = visibleTags.Count > 0 ? visibleTags.Count - 1 : -1;
+            }
         }
 
         void RefreshSelectionState()

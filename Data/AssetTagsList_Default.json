@@ -1,58 +1,89 @@
 {
     "tags": [
         {
+            "tagId": "c5ada2ac2dea4aaabef06e4d26f08e9a",
+            "tagName": "Script",
+            "colorR": 0.2672954201698303,
+            "colorG": 0.46641120314598086,
+            "colorB": 1.0,
+            "colorA": 1.0,
+            "tagUpdatedAt": "",
+            "tagUpdatedBy": "",
+            "orderKey": "0000000000000000",
+            "orderUpdatedAt": "",
+            "orderUpdatedBy": "",
+            "order": 0
+        },
+        {
+            "tagId": "0c21d4c987074976adb81f4854276022",
+            "tagName": "Editor",
+            "colorR": 0.11241627484560013,
+            "colorG": 0.7295596599578857,
+            "colorB": 0.12608279287815095,
+            "colorA": 1.0,
+            "tagUpdatedAt": "",
+            "tagUpdatedBy": "",
+            "orderKey": "0000000000000001",
+            "orderUpdatedAt": "",
+            "orderUpdatedBy": "",
+            "order": 1
+        },
+        {
+            "tagId": "5b9ea440c6d3407091bafb727a01a0ec",
+            "tagName": "Library",
+            "colorR": 0.09119486808776856,
+            "colorG": 0.7111957669258118,
+            "colorB": 1.0,
+            "colorA": 1.0,
+            "tagUpdatedAt": "",
+            "tagUpdatedBy": "",
+            "orderKey": "0000000000000002",
+            "orderUpdatedAt": "",
+            "orderUpdatedBy": "",
+            "order": 2
+        },
+        {
+            "tagId": "3e1e9d4d55da4dc99175f0ca8fd2796c",
             "tagName": "Setting",
             "colorR": 0.0,
-            "colorG": 0.3832608163356781,
-            "colorB": 0.9150943160057068,
+            "colorG": 0.2796187400817871,
+            "colorB": 1.0,
             "colorA": 1.0,
-            "lastModifiedAtUtc": "",
-            "lastModifiedBy": ""
+            "tagUpdatedAt": "",
+            "tagUpdatedBy": "",
+            "orderKey": "0000000000000003",
+            "orderUpdatedAt": "",
+            "orderUpdatedBy": "",
+            "order": 3
         },
         {
+            "tagId": "f8858cc438fb414f88b800acb68def4e",
             "tagName": "Document",
-            "colorR": 0.6320754289627075,
-            "colorG": 0.40898945927619936,
-            "colorB": 0.17690156400203706,
+            "colorR": 0.5345910787582398,
+            "colorG": 0.26657378673553469,
+            "colorB": 0.15298035740852357,
             "colorA": 1.0,
-            "lastModifiedAtUtc": "",
-            "lastModifiedBy": ""
+            "tagUpdatedAt": "",
+            "tagUpdatedBy": "",
+            "orderKey": "0000000000000004",
+            "orderUpdatedAt": "",
+            "orderUpdatedBy": "",
+            "order": 4
         },
         {
-            "tagName": "Script",
-            "colorR": 0.29592373967170718,
-            "colorG": 0.5583456754684448,
-            "colorB": 0.9905660152435303,
-            "colorA": 1.0,
-            "lastModifiedAtUtc": "",
-            "lastModifiedBy": ""
-        },
-        {
-            "tagName": "Library",
-            "colorR": 0.6388086676597595,
-            "colorG": 0.7882353067398071,
+            "tagId": "7a678a154e5f4798af4df8357541a6d2",
+            "tagName": "Texture",
+            "colorR": 1.0,
+            "colorG": 0.6651791334152222,
             "colorB": 0.0,
             "colorA": 1.0,
-            "lastModifiedAtUtc": "",
-            "lastModifiedBy": ""
-        },
-        {
-            "tagName": "Editor",
-            "colorR": 0.0,
-            "colorG": 0.6792452931404114,
-            "colorB": 0.012422453612089157,
-            "colorA": 1.0,
-            "lastModifiedAtUtc": "",
-            "lastModifiedBy": ""
-        },
-        {
-            "tagName": "Texture",
-            "colorR": 0.8853462934494019,
-            "colorG": 0.6889688372612,
-            "colorB": 0.0000011392688747946523,
-            "colorA": 1.0,
-            "lastModifiedAtUtc": "",
-            "lastModifiedBy": ""
+            "tagUpdatedAt": "",
+            "tagUpdatedBy": "",
+            "orderKey": "0000000000000005",
+            "orderUpdatedAt": "",
+            "orderUpdatedBy": "",
+            "order": 5
         }
-    ]
+    ],
+    "hiddenTags": []
 }

@@ -14,9 +14,10 @@ namespace INDiEA.AssetTags
         [Serializable]
         public sealed class AssetTagEntry
         {
-            public string name;
-            public string lastModifiedAtUtc;
-            public string lastModifiedBy;
+            public string tagId;
+
+            public string linkUpdatedAt;
+            public string linkUpdatedBy;
 
             public static AssetTagEntry Clone(AssetTagEntry e)
             {
@@ -24,9 +25,9 @@ namespace INDiEA.AssetTags
                     return null;
                 return new AssetTagEntry
                 {
-                    name = string.IsNullOrWhiteSpace(e.name) ? string.Empty : e.name.Trim(),
-                    lastModifiedAtUtc = e.lastModifiedAtUtc,
-                    lastModifiedBy = e.lastModifiedBy,
+                    tagId = string.IsNullOrWhiteSpace(e.tagId) ? null : e.tagId.Trim(),
+                    linkUpdatedAt = e.linkUpdatedAt,
+                    linkUpdatedBy = e.linkUpdatedBy,
                 };
             }
         }
@@ -37,16 +38,22 @@ namespace INDiEA.AssetTags
             public string guid;
             public List<AssetTagEntry> tags = new List<AssetTagEntry>();
 
-            public List<string> GetTagNames()
+            public List<string> GetResolvedTagNames(AssetTagsList tagList)
             {
-                if (tags == null || tags.Count == 0)
+                if (tags == null || tags.Count == 0 || tagList == null)
                     return new List<string>();
                 var result = new List<string>(tags.Count);
+                var seen = new HashSet<string>(TagComparer);
                 foreach (var e in tags)
                 {
-                    if (e == null || string.IsNullOrWhiteSpace(e.name))
+                    if (e == null || !AssetTagsTagId.IsWellFormed(e.tagId))
                         continue;
-                    result.Add(e.name.Trim());
+                    if (!tagList.TryGetName(e.tagId, out var name) || string.IsNullOrWhiteSpace(name))
+                        continue;
+                    name = name.Trim();
+                    if (!seen.Add(name))
+                        continue;
+                    result.Add(name);
                 }
 
                 return result;
@@ -55,17 +62,17 @@ namespace INDiEA.AssetTags
 
         public List<TagInfo> assetTags = new List<TagInfo>();
 
-        static void StampNew(AssetTagEntry e)
+        static void StampLink(AssetTagEntry e)
         {
-            e.lastModifiedAtUtc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
-            e.lastModifiedBy = AssetTagsJsonRepository.ResolveLastModifiedBy();
+            e.linkUpdatedAt = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+            e.linkUpdatedBy = AssetTagsJsonRepository.ResolveLastModifiedBy();
         }
 
-        public void AddTag(string guid, string tag)
+        public void AddTagId(string guid, string tagIdRaw)
         {
-            if (string.IsNullOrEmpty(guid) || string.IsNullOrWhiteSpace(tag))
+            if (string.IsNullOrEmpty(guid) || !AssetTagsTagId.IsWellFormed(tagIdRaw))
                 return;
-            var normalized = tag.Trim();
+            var tagId = tagIdRaw.Trim();
             var row = assetTags.Find(x => x.guid == guid);
             if (row == null)
             {
@@ -75,81 +82,61 @@ namespace INDiEA.AssetTags
 
             if (row.tags == null)
                 row.tags = new List<AssetTagEntry>();
-            var existing = row.tags.Find(x => TagComparer.Equals(x.name, normalized));
-            if (existing != null)
+            if (row.tags.Exists(x =>
+                    x != null
+                    && AssetTagsTagId.IsWellFormed(x.tagId)
+                    && string.Equals(x.tagId, tagId, StringComparison.OrdinalIgnoreCase)))
                 return;
-            var entry = new AssetTagEntry { name = normalized };
-            StampNew(entry);
+            var entry = new AssetTagEntry { tagId = tagId };
+            StampLink(entry);
             row.tags.Add(entry);
         }
 
-        public void RemoveTag(string guid, string tag)
+        public void AddTag(string guid, string tagDisplayName, AssetTagsList tagList)
         {
-            if (string.IsNullOrEmpty(guid))
+            if (tagList == null || string.IsNullOrWhiteSpace(tagDisplayName))
                 return;
+            if (!tagList.TryGetId(tagDisplayName.Trim(), out var tagId))
+                return;
+            AddTagId(guid, tagId);
+        }
+
+        public void RemoveTagId(string guid, string tagIdRaw)
+        {
+            if (string.IsNullOrEmpty(guid) || !AssetTagsTagId.IsWellFormed(tagIdRaw))
+                return;
+            var tagId = tagIdRaw.Trim();
             var row = assetTags.Find(x => x.guid == guid);
             if (row?.tags == null)
                 return;
-            row.tags.RemoveAll(x => x != null && TagComparer.Equals(x.name, tag));
+            row.tags.RemoveAll(x =>
+                x != null
+                && AssetTagsTagId.IsWellFormed(x.tagId)
+                && string.Equals(x.tagId, tagId, StringComparison.OrdinalIgnoreCase));
             if (row.tags.Count == 0)
                 assetTags.Remove(row);
         }
 
-        public List<string> GetTags(string guid)
+        public void RemoveTag(string guid, string tagDisplayName, AssetTagsList tagList)
+        {
+            if (tagList == null || string.IsNullOrWhiteSpace(tagDisplayName))
+                return;
+            if (!tagList.TryGetId(tagDisplayName.Trim(), out var tagId))
+                return;
+            RemoveTagId(guid, tagId);
+        }
+
+        public List<string> GetTags(string guid, AssetTagsList tagList)
         {
             var row = assetTags.Find(x => x.guid == guid);
-            return row?.GetTagNames() ?? new List<string>();
-        }
-
-        public void RenameTag(string oldTag, string newTag)
-        {
-            if (string.IsNullOrWhiteSpace(oldTag) || string.IsNullOrWhiteSpace(newTag))
-                return;
-            var normalizedOld = oldTag.Trim();
-            var normalizedNew = newTag.Trim();
-            if (TagComparer.Equals(normalizedOld, normalizedNew))
-                return;
-
-            foreach (var row in assetTags)
-            {
-                if (row?.tags == null)
-                    continue;
-                foreach (var e in row.tags)
-                {
-                    if (e == null || !TagComparer.Equals(e.name, normalizedOld))
-                        continue;
-                    e.name = normalizedNew;
-                    StampNew(e);
-                }
-
-                DedupeTagEntries(row);
-            }
-        }
-
-        void DedupeTagEntries(TagInfo row)
-        {
-            if (row?.tags == null || row.tags.Count <= 1)
-                return;
-            var seen = new HashSet<string>(TagComparer);
-            var kept = new List<AssetTagEntry>();
-            foreach (var e in row.tags)
-            {
-                if (e == null || string.IsNullOrWhiteSpace(e.name))
-                    continue;
-                var n = e.name.Trim();
-                if (!seen.Add(n))
-                    continue;
-                kept.Add(e);
-            }
-
-            row.tags = kept;
+            return row?.GetResolvedTagNames(tagList) ?? new List<string>();
         }
 
         public void ReplaceOrAddTagEntry(string guid, AssetTagEntry entry)
         {
-            if (string.IsNullOrEmpty(guid) || entry == null || string.IsNullOrWhiteSpace(entry.name))
+            if (string.IsNullOrEmpty(guid) || entry == null || !AssetTagsTagId.IsWellFormed(entry.tagId))
                 return;
-            var name = entry.name.Trim();
+            var tagId = entry.tagId.Trim();
             var row = assetTags.Find(x => x.guid == guid);
             if (row == null)
             {
@@ -159,14 +146,17 @@ namespace INDiEA.AssetTags
 
             if (row.tags == null)
                 row.tags = new List<AssetTagEntry>();
-            var existing = row.tags.Find(x => TagComparer.Equals(x.name, name));
+            var existing = row.tags.Find(x =>
+                x != null
+                && AssetTagsTagId.IsWellFormed(x.tagId)
+                && string.Equals(x.tagId, tagId, StringComparison.OrdinalIgnoreCase));
             var c = AssetTagEntry.Clone(entry);
-            c.name = name;
+            c.tagId = tagId;
             if (existing != null)
             {
-                existing.name = c.name;
-                existing.lastModifiedAtUtc = c.lastModifiedAtUtc;
-                existing.lastModifiedBy = c.lastModifiedBy;
+                existing.tagId = c.tagId;
+                existing.linkUpdatedAt = c.linkUpdatedAt;
+                existing.linkUpdatedBy = c.linkUpdatedBy;
             }
             else
             {
@@ -174,13 +164,19 @@ namespace INDiEA.AssetTags
             }
         }
 
-        public void ReorderAllTagsByGlobalOrder(List<string> globalOrder)
+        public void ReorderAllTagsByGlobalOrder(AssetTagsList tagList, List<string> globalOrder)
         {
+            if (tagList == null || globalOrder == null || globalOrder.Count == 0)
+                return;
             var rank = new Dictionary<string, int>(TagComparer);
             for (var i = 0; i < globalOrder.Count; i++)
             {
-                if (!rank.ContainsKey(globalOrder[i]))
-                    rank.Add(globalOrder[i], i);
+                var key = globalOrder[i];
+                if (string.IsNullOrWhiteSpace(key))
+                    continue;
+                var k = key.Trim();
+                if (!rank.ContainsKey(k))
+                    rank.Add(k, i);
             }
 
             foreach (var row in assetTags)
@@ -188,12 +184,20 @@ namespace INDiEA.AssetTags
                 if (row?.tags == null || row.tags.Count == 0)
                     continue;
                 row.tags = row.tags
-                    .Where(e => e != null && !string.IsNullOrWhiteSpace(e.name))
+                    .Where(e => e != null && AssetTagsTagId.IsWellFormed(e.tagId))
                     .Select((e, index) => new
                     {
                         e,
                         index,
-                        order = rank.TryGetValue(e.name.Trim(), out var value) ? value : int.MaxValue,
+                        display = tagList.TryGetName(e.tagId, out var displayName) ? displayName.Trim() : string.Empty,
+                    })
+                    .Select(x => new
+                    {
+                        x.e,
+                        x.index,
+                        order = string.IsNullOrEmpty(x.display) || !rank.TryGetValue(x.display, out var value)
+                            ? int.MaxValue
+                            : value,
                     })
                     .OrderBy(x => x.order)
                     .ThenBy(x => x.index)

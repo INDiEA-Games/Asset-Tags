@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Search;
 using UnityEngine;
@@ -115,7 +116,7 @@ namespace INDiEA.AssetTags
             AssetTagsManager.EnsureCoreAssetsExist();
             foreach (var row in AssetTagsManager.EnumerateLocalTagRowsForSearch())
             {
-                var tagNames = row.GetTagNames();
+                var tagNames = AssetTagsManager.GetSearchScratchResolvedTags(row);
                 if (string.IsNullOrEmpty(row.guid) || tagNames.Count == 0)
                     continue;
                 if (!RowMatches(tagNames, needle, listAll))
@@ -256,7 +257,7 @@ namespace INDiEA.AssetTags
             AssetTagsManager.EnsureCoreAssetsExist();
             foreach (var row in AssetTagsManager.EnumerateLocalTagRowsForSearch())
             {
-                var tagNames = row.GetTagNames();
+                var tagNames = AssetTagsManager.GetSearchScratchResolvedTags(row);
                 if (string.IsNullOrEmpty(row.guid) || tagNames.Count == 0)
                     continue;
                 tagsByGuid[row.guid] = tagNames.ToArray();
@@ -285,7 +286,7 @@ namespace INDiEA.AssetTags
             {
                 if (string.IsNullOrEmpty(tag))
                     continue;
-                indexer.IndexProperty(context.documentIndex, PropertyName, tag, saveKeyword: true, exact: false);
+                indexer.IndexProperty(context.documentIndex, PropertyName, tag, saveKeyword: true);
             }
         }
 
@@ -295,7 +296,7 @@ namespace INDiEA.AssetTags
             AssetTagsManager.EnsureCoreAssetsExist();
             foreach (var row in AssetTagsManager.EnumerateLocalTagRowsForSearch())
             {
-                var tagNames = row.GetTagNames();
+                var tagNames = AssetTagsManager.GetSearchScratchResolvedTags(row);
                 if (string.IsNullOrEmpty(row.guid) || tagNames.Count == 0)
                     continue;
                 result[row.guid] = CanonicalizeTags(tagNames);
@@ -340,6 +341,7 @@ namespace INDiEA.AssetTags
                 var assetPath = AssetDatabase.GUIDToAssetPath(guid);
                 if (!string.IsNullOrEmpty(assetPath)
                     && assetPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)
+                    && AssetPathExistsForReindex(assetPath)
                     && IsSearchReindexImportSafe(assetPath))
                     paths.Add(assetPath);
             }
@@ -378,6 +380,15 @@ namespace INDiEA.AssetTags
             }
         }
 
+        static bool AssetPathExistsForReindex(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+                return false;
+            if (AssetDatabase.IsValidFolder(assetPath))
+                return true;
+            return AssetDatabase.LoadMainAssetAtPath(assetPath) != null;
+        }
+
         public static void ReindexAllTaggedAssetsForSearch()
         {
             ReindexGuidsForSearch(BuildTagSignatureByGuid().Keys);
@@ -388,11 +399,28 @@ namespace INDiEA.AssetTags
     internal static class AssetTagsSearchReindexCoordinator
     {
         static Dictionary<string, string> lastTagSignatureByGuid;
+        static AssetTagsSettings settingsCache;
 
         static AssetTagsSearchReindexCoordinator()
         {
             lastTagSignatureByGuid = AssetTagsOpenInSearchIndexer.BuildTagSignatureByGuid();
             AssetTagsManager.OnTagsChanged += OnTagsChanged;
+        }
+
+        public static void InvalidateSettingsCache()
+        {
+            settingsCache = null;
+        }
+
+        static bool IsIndexingSearchAfterTagChangesEnabled()
+        {
+            if (settingsCache == null)
+            {
+                AssetTagsManager.EnsureCoreAssetsExist();
+                settingsCache = AssetDatabase.LoadAssetAtPath<AssetTagsSettings>(AssetTagsManager.SettingsAssetPath);
+            }
+
+            return settingsCache == null || settingsCache.IndexingSearchAfterTagChanges;
         }
 
         static void OnTagsChanged()
@@ -412,16 +440,24 @@ namespace INDiEA.AssetTags
                     changedGuids.Add(pair.Key);
             }
 
-            if (changedGuids.Count > 0)
+            if (changedGuids.Count > 0 && IsIndexingSearchAfterTagChangesEnabled())
                 AssetTagsOpenInSearchIndexer.ReindexGuidsForSearch(changedGuids);
 
             lastTagSignatureByGuid = current;
         }
 
+        static int refreshSnapshotGeneration;
+
         internal static void RefreshSnapshotFromAsset()
         {
-            AssetTagsManager.InvalidateLoadedState();
-            OnTagsChanged();
+            var gen = ++refreshSnapshotGeneration;
+            EditorApplication.delayCall += () =>
+            {
+                if (gen != refreshSnapshotGeneration)
+                    return;
+                AssetTagsManager.InvalidateLoadedState();
+                OnTagsChanged();
+            };
         }
     }
 

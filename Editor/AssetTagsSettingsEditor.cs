@@ -7,6 +7,10 @@ namespace INDiEA.AssetTags
     sealed class AssetTagsSettingsEditor : Editor
     {
         const string ConversionMenuRoot = "Window/INDiEA/Asset Tags/";
+        SerializedProperty overrideProjectBrowserToolbar;
+        SerializedProperty indexingSearchAfterTagChanges;
+        SerializedProperty mergeDeletedTagRecords;
+        SerializedProperty enableDebugLogs;
 
         [MenuItem(ConversionMenuRoot + "Convert All Asset Tags To Asset Labels", false, 10)]
         static void MenuConvertAllAssetTagsToAssetLabels() =>
@@ -38,24 +42,61 @@ namespace INDiEA.AssetTags
             AssetTagsManager.Instance.ConvertAssetLabelsToTags();
         }
 
-        void OnEnable() => Undo.undoRedoPerformed += OnUndoRedo;
+        static void RunClearCurrentLocalDataIfConfirmed()
+        {
+            if (!EditorUtility.DisplayDialog(
+                    "Clear Current Local Data",
+                    "Hide all currently known Asset Tags for this client, then clear this client's local tag assignments and tag list entries. Other client JSON files are not modified. Continue?",
+                    "Clear",
+                    "Cancel"))
+                return;
+            AssetTagsManager.Instance.ClearCurrentLocalData();
+        }
+
+        void OnEnable()
+        {
+            overrideProjectBrowserToolbar = serializedObject.FindProperty("overrideProjectBrowserToolbar");
+            indexingSearchAfterTagChanges = serializedObject.FindProperty("indexingSearchAfterTagChanges");
+            mergeDeletedTagRecords = serializedObject.FindProperty("mergeDeletedTagRecords");
+            enableDebugLogs = serializedObject.FindProperty("enableDebugLogs");
+            Undo.undoRedoPerformed += OnUndoRedo;
+        }
 
         void OnDisable() => Undo.undoRedoPerformed -= OnUndoRedo;
 
-        static void OnUndoRedo() => AssetTagsProjectBrowserToolbar.InvalidateSettingsCache();
+        static void OnUndoRedo()
+        {
+            AssetTagsProjectBrowserToolbar.InvalidateSettingsCache();
+            AssetTagsSearchReindexCoordinator.InvalidateSettingsCache();
+        }
 
         public override void OnInspectorGUI()
         {
+            serializedObject.Update();
+
             EditorGUI.BeginChangeCheck();
-            DrawDefaultInspector();
+            EditorGUILayout.PropertyField(overrideProjectBrowserToolbar);
+            EditorGUILayout.PropertyField(indexingSearchAfterTagChanges);
+            EditorGUILayout.PropertyField(mergeDeletedTagRecords);
             if (EditorGUI.EndChangeCheck())
+            {
+                serializedObject.ApplyModifiedProperties();
                 AssetTagsProjectBrowserToolbar.InvalidateSettingsCache();
+                AssetTagsSearchReindexCoordinator.InvalidateSettingsCache();
+            }
+            else
+            {
+                serializedObject.ApplyModifiedProperties();
+            }
 
             EditorGUILayout.Space();
             using (new EditorGUILayout.VerticalScope())
             {
-                if (GUILayout.Button("Sync Current Snapshot To Local JSON"))
-                    AssetTagsManager.Instance.SyncCurrentSnapshotToLocal();
+                if (GUILayout.Button("Save Current Snapshot to Local Data"))
+                    AssetTagsManager.Instance.SaveCurrentTagsToLocalData();
+
+                if (GUILayout.Button("Clear Current Local Data"))
+                    RunClearCurrentLocalDataIfConfirmed();
 
                 if (GUILayout.Button("Convert All Asset Tags To Asset Labels"))
                     RunConvertTagsToAssetLabelsIfConfirmed();
@@ -63,6 +104,12 @@ namespace INDiEA.AssetTags
                 if (GUILayout.Button("Convert All Asset Labels To Asset Tags"))
                     RunConvertAssetLabelsToTagsIfConfirmed();
             }
+
+            EditorGUILayout.Space();
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(enableDebugLogs);
+            if (EditorGUI.EndChangeCheck())
+                serializedObject.ApplyModifiedProperties();
         }
     }
 }

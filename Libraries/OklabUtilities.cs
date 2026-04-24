@@ -5,6 +5,7 @@
 // License notice:
 // - Conversion formulas are based on the reference implementation published by Bjorn Ottosson.
 // - The reference implementation is released under the MIT License.
+
 using UnityEngine;
 
 namespace INDiEA.AssetTags
