@@ -338,20 +338,24 @@ namespace INDiEA.AssetTags
             if (!GUI.Button(rect, DeleteIcon, ActionButtonStyle))
                 return;
 
-            var usageCount = CountAssetsUsingTag(tag);
+            var tagToDelete = tag;
+            EditorApplication.delayCall += () => ConfirmDeleteTagAfterGui(tagToDelete);
+        }
+
+        void ConfirmDeleteTagAfterGui(string tagToDelete)
+        {
+            var usageCount = CountAssetsUsingTag(tagToDelete);
             if (usageCount > 0)
             {
-                var isConfirmed = EditorUtility.DisplayDialog(
-                    "Delete Tag",
-                    $"The tag \"{tag}\" is currently used by {usageCount} asset(s).\n\nDo you want to delete this tag from all assets?",
-                    "Yes",
-                    "Cancel");
-
-                if (!isConfirmed)
+                if (!EditorUtility.DisplayDialog(
+                        "Delete Tag",
+                        $"The tag \"{tagToDelete}\" is currently used by {usageCount} asset(s).\n\nDo you want to delete this tag from all assets?",
+                        "Yes",
+                        "Cancel"))
                     return;
             }
 
-            AssetTagsManager.Instance.DeleteTag(tag);
+            AssetTagsManager.Instance.DeleteTag(tagToDelete);
             ReloadAndRepaint();
         }
 

@@ -41,14 +41,19 @@ namespace INDiEA.AssetTags
             return result;
         }
 
-        public void AddTag(string tag)
+        public void AddTag(string tag) => TryAddTagIfMissing(tag);
+
+        public bool TryAddTagIfMissing(string tag)
         {
-            if (!HasTag(tag))
-            {
-                var row = new TagInfo(tag.Trim(), AssetTagsColorUtilities.GenerateTagColor());
-                row.StampModification();
-                tags.Add(row);
-            }
+            if (string.IsNullOrWhiteSpace(tag))
+                return false;
+            var name = tag.Trim();
+            if (HasTag(name))
+                return false;
+            var row = new TagInfo(name, AssetTagsColorUtilities.GenerateTagColor());
+            row.StampModification();
+            tags.Add(row);
+            return true;
         }
 
         public void RemoveTag(string tag) =>

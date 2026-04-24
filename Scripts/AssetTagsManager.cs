@@ -19,6 +19,8 @@ namespace INDiEA.AssetTags
         public const string SettingsAssetPath = RootFolderPath + "/AssetTagsSettings.asset";
 
         static AssetTagsManager instance;
+        static AssetTagsData searchRowScratch;
+
         AssetTagsData data;
         AssetTagsList list;
         string workstationToken;
@@ -179,7 +181,13 @@ namespace INDiEA.AssetTags
             if (data != null && list != null)
                 return;
 
-            AssetTagsJsonRepository.RebuildMergedFromAllLocalFilesAndGlobalCache(out data, out list);
+            if (data == null)
+                data = new AssetTagsData();
+            if (list == null)
+                list = new AssetTagsList();
+
+            AssetTagsJsonRepository.RebuildMergedFromAllLocalFilesAndGlobalCache(out _, out _);
+            AssetTagsJsonRepository.LoadLocal(workstationToken, data, list);
 
             NotifyChanged();
         }
@@ -195,7 +203,10 @@ namespace INDiEA.AssetTags
         public static IEnumerable<AssetTagsData.TagInfo> EnumerateLocalTagRowsForSearch()
         {
             Instance.EnsureLoaded();
-            return Instance.data.assetTags;
+            if (searchRowScratch == null)
+                searchRowScratch = new AssetTagsData();
+            AssetTagsJsonRepository.LoadGlobalDataCacheInto(searchRowScratch);
+            return searchRowScratch.assetTags;
         }
 
         public void SyncCurrentSnapshotToLocal()
@@ -216,13 +227,56 @@ namespace INDiEA.AssetTags
             if (saveData)
                 AssetTagsJsonRepository.SaveDataState(dataPath, data);
 
-            if (saveList)
+            var catalogDirty = false;
+            if (saveData)
+                catalogDirty = ReconcileCatalogWithData();
+
+            var saveListFile = saveList || catalogDirty;
+            if (saveListFile)
                 AssetTagsJsonRepository.SaveListState(listPath, list);
 
-            AssetTagsJsonRepository.RebuildMergedFromAllLocalFilesAndGlobalCache(out data, out list);
+            AssetTagsJsonRepository.RebuildMergedFromAllLocalFilesAndGlobalCache(out _, out _);
+            AssetTagsJsonRepository.LoadLocal(workstationToken, data, list);
 
             NotifyChanged();
             EditorApplication.RepaintProjectWindow();
+        }
+
+        bool ReconcileCatalogWithData()
+        {
+            if (data?.assetTags == null || list == null)
+                return false;
+
+            var inUse = new HashSet<string>(TagComparer);
+            foreach (var row in data.assetTags)
+            {
+                if (row?.tags == null)
+                    continue;
+                for (var i = 0; i < row.tags.Count; i++)
+                {
+                    var e = row.tags[i];
+                    if (e == null || string.IsNullOrWhiteSpace(e.name))
+                        continue;
+                    inUse.Add(e.name.Trim());
+                }
+            }
+
+            var changed = false;
+            foreach (var name in inUse)
+            {
+                if (list.TryAddTagIfMissing(name))
+                    changed = true;
+            }
+
+            foreach (var name in list.GetAvailableTags())
+            {
+                if (string.IsNullOrEmpty(name) || inUse.Contains(name))
+                    continue;
+                list.RemoveTag(name);
+                changed = true;
+            }
+
+            return changed;
         }
 
         static bool TryNormalizeTag(string raw, out string normalized)

@@ -119,6 +119,61 @@ namespace INDiEA.AssetTags
         static string GlobalAssetTagListFullPath =>
             Path.Combine(GlobalDataDirFull, GlobalAssetTagListFileName);
 
+        static DateTime MaxWriteUtcInFolder(string folder, string pattern)
+        {
+            if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+                return DateTime.MinValue;
+            var best = DateTime.MinValue;
+            foreach (var path in Directory.GetFiles(folder, pattern))
+            {
+                var t = File.GetLastWriteTimeUtc(path);
+                if (t > best)
+                    best = t;
+            }
+
+            return best;
+        }
+
+        static DateTime MaxWriteUtc(params string[] paths)
+        {
+            var best = DateTime.MinValue;
+            if (paths == null)
+                return best;
+            for (var i = 0; i < paths.Length; i++)
+            {
+                var path = paths[i];
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                    continue;
+                var t = File.GetLastWriteTimeUtc(path);
+                if (t > best)
+                    best = t;
+            }
+
+            return best;
+        }
+
+        static bool GlobalCacheIsNewerThanLocalJson()
+        {
+            try
+            {
+                var localNewest = MaxWriteUtcInFolder(LocalDataFolderFull, "*.json");
+                if (localNewest == DateTime.MinValue)
+                    return true;
+                var globalNewest = MaxWriteUtc(GlobalAssetTagsFullPath, GlobalAssetTagListFullPath);
+                return globalNewest > localNewest;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        public static void LoadGlobalDataCacheInto(AssetTagsData target)
+        {
+            target.assetTags.Clear();
+            TryReadData(GlobalAssetTagsFullPath, target);
+        }
+
         [Serializable]
         class DataFileDto
         {
@@ -303,8 +358,9 @@ namespace INDiEA.AssetTags
             var globalData = new AssetTagsData();
             var globalList = new AssetTagsList();
             LoadGlobal(globalData, globalList);
-            PreferNewerMergeDataInto(mergedData, globalData);
-            PreferNewerMergeListInto(mergedList, globalList);
+            var allowAddsFromGlobal = GlobalCacheIsNewerThanLocalJson();
+            PreferNewerMergeDataInto(mergedData, globalData, allowAddsFromGlobal);
+            PreferNewerMergeListInto(mergedList, globalList, allowAddsFromGlobal);
 
             SaveDataState(GlobalAssetTagsFullPath, mergedData);
             SaveListState(GlobalAssetTagListFullPath, mergedList);
@@ -335,7 +391,7 @@ namespace INDiEA.AssetTags
             return false;
         }
 
-        static void PreferNewerMergeDataInto(AssetTagsData target, AssetTagsData incoming)
+        static void PreferNewerMergeDataInto(AssetTagsData target, AssetTagsData incoming, bool addMissing = true)
         {
             if (incoming?.assetTags == null)
                 return;
@@ -356,14 +412,18 @@ namespace INDiEA.AssetTags
                         existingEntry = trow.tags.Find(x =>
                             x != null && string.Equals(x.name, name, StringComparison.OrdinalIgnoreCase));
                     if (existingEntry == null)
+                    {
+                        if (!addMissing)
+                            continue;
                         target.ReplaceOrAddTagEntry(guid, AssetTagsData.AssetTagEntry.Clone(e));
+                    }
                     else if (IsUtcStrictlyNewerThan(e.lastModifiedAtUtc, existingEntry.lastModifiedAtUtc))
                         target.ReplaceOrAddTagEntry(guid, AssetTagsData.AssetTagEntry.Clone(e));
                 }
             }
         }
 
-        static void PreferNewerMergeListInto(AssetTagsList target, AssetTagsList incoming)
+        static void PreferNewerMergeListInto(AssetTagsList target, AssetTagsList incoming, bool addMissing = true)
         {
             if (incoming?.tags == null)
                 return;
@@ -375,7 +435,11 @@ namespace INDiEA.AssetTags
                 var existing = target.tags.Find(x =>
                     x != null && string.Equals(x.tagName, name, StringComparison.OrdinalIgnoreCase));
                 if (existing == null)
+                {
+                    if (!addMissing)
+                        continue;
                     target.ReplaceOrAddListEntry(CloneListTagInfo(e));
+                }
                 else if (IsUtcStrictlyNewerThan(e.lastModifiedAtUtc, existing.lastModifiedAtUtc))
                     target.ReplaceOrAddListEntry(CloneListTagInfo(e));
             }
