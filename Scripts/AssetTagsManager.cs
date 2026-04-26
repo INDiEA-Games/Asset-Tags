@@ -487,6 +487,73 @@ namespace INDiEA.AssetTags
                 RestampTagToMergedTail(normalizedTag);
         }
 
+        bool EnsureLocalRowForOrder(string tag)
+        {
+            if (string.IsNullOrEmpty(tag) || localList == null)
+                return false;
+            if (localList.Contains(tag))
+                return true;
+
+            AssetTagsList.TagInfo src = null;
+            if (mergedViewList?.tags != null)
+            {
+                src = mergedViewList.tags.Find(x =>
+                    x != null
+                    && !string.IsNullOrWhiteSpace(x.tagName)
+                    && TagComparer.Equals(x.tagName.Trim(), tag));
+            }
+
+            if (src != null)
+            {
+                var copy = new AssetTagsList.TagInfo(tag, src.color)
+                {
+                    tagId = AssetTagsTagId.IsWellFormed(src.tagId) ? src.tagId.Trim() : null,
+                    tagUpdatedAt = src.tagUpdatedAt,
+                    tagUpdatedBy = src.tagUpdatedBy,
+                    orderKey = string.IsNullOrWhiteSpace(src.orderKey) ? null : src.orderKey.Trim(),
+                    orderUpdatedAt = src.orderUpdatedAt,
+                    orderUpdatedBy = src.orderUpdatedBy,
+                    order = src.order,
+                };
+                localList.ReplaceOrAddListEntry(copy);
+                return true;
+            }
+
+            return localList.TryAddTagIfMissing(tag);
+        }
+
+        bool TryGetOrderKey(string tag, out string orderKey)
+        {
+            orderKey = null;
+            if (string.IsNullOrWhiteSpace(tag))
+                return false;
+
+            return TryGetOrderKeyFromList(localList, tag, out orderKey)
+                   || TryGetOrderKeyFromList(mergedViewList, tag, out orderKey);
+        }
+
+        bool TryGetOrderKeyFromList(AssetTagsList list, string tag, out string orderKey)
+        {
+            orderKey = null;
+            if (list?.tags == null || string.IsNullOrWhiteSpace(tag))
+                return false;
+
+            for (var i = 0; i < list.tags.Count; i++)
+            {
+                var row = list.tags[i];
+                if (row == null || string.IsNullOrWhiteSpace(row.tagName))
+                    continue;
+                if (!TagComparer.Equals(row.tagName.Trim(), tag))
+                    continue;
+                if (!TagSortOrder.TryParseOrderKey(row.orderKey, out _))
+                    continue;
+                orderKey = row.orderKey.Trim();
+                return true;
+            }
+
+            return false;
+        }
+
         void RestampTagToMergedTail(string normalizedTag)
         {
             if (string.IsNullOrWhiteSpace(normalizedTag) || localList == null)
@@ -758,7 +825,6 @@ namespace INDiEA.AssetTags
             if (!TryNormalizeTag(tag, out var normalizedTag))
                 return;
 
-            SyncMissingFromMerged();
             var hasTagId = TryGetTagId(normalizedTag, out var tagId, ensureLocalById: true);
 
             foreach (var row in localData.assetTags.ToArray())
@@ -910,17 +976,21 @@ namespace INDiEA.AssetTags
             if (movedIndex < 0)
                 return;
 
-            foreach (var nm in ordered)
-            {
-                if (!localList.Contains(nm))
-                    EnsureLocalRowForMutation(nm);
-            }
-
             var previousTag = movedIndex > 0 ? ordered[movedIndex - 1] : null;
             var nextTag = movedIndex < ordered.Count - 1 ? ordered[movedIndex + 1] : null;
+            var previousOrderKey = TryGetOrderKey(previousTag, out var prevKey) ? prevKey : null;
+            var nextOrderKey = TryGetOrderKey(nextTag, out var nextKey) ? nextKey : null;
+
+            if (EnsureLocalRowForOrder(normalizedMovedTag)
+                && localList.MoveTagBetweenOrderKeys(normalizedMovedTag, previousOrderKey, nextOrderKey, movedIndex))
+            {
+                CommitChanges(saveData: false, saveList: true);
+                return;
+            }
+
+            EnsureLocalRowForMutation(normalizedMovedTag);
             localList.MoveTagBetweenNames(normalizedMovedTag, previousTag, nextTag);
-            ReorderDataByList();
-            CommitChanges(saveData: true, saveList: true);
+            CommitChanges(saveData: false, saveList: true);
         }
 
         public void MoveTagUp(string tag)

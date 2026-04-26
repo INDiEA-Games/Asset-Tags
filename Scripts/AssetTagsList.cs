@@ -273,6 +273,59 @@ namespace INDiEA.AssetTags
                 RedistributeAllTagOrderKeysFromPhysicalOrder();
         }
 
+        public bool MoveTagBetweenOrderKeys(string tag, string previousOrderKey, string nextOrderKey, int orderIndex)
+        {
+            if (string.IsNullOrWhiteSpace(tag))
+                return false;
+
+            var row = tags.Find(x => MatchesTagName(x, tag));
+            if (row == null)
+                return false;
+
+            if (!TryAssignOrderKeyBetween(previousOrderKey, nextOrderKey, row))
+                return false;
+
+            row.order = Mathf.Max(0, orderIndex);
+            return true;
+        }
+
+        static bool TryAssignOrderKeyBetween(string previousOrderKey, string nextOrderKey, TagInfo row)
+        {
+            if (row == null)
+                return false;
+
+            var hasLower = AssetTagsManager.TagSortOrder.TryParseOrderKey(previousOrderKey, out var lower);
+            var hasUpper = AssetTagsManager.TagSortOrder.TryParseOrderKey(nextOrderKey, out var upper);
+
+            ulong nextKey;
+            if (hasLower && hasUpper)
+            {
+                if (upper <= lower || upper - lower <= 1UL)
+                    return false;
+                nextKey = lower + (upper - lower) / 2UL;
+            }
+            else if (hasLower)
+            {
+                if (lower > ulong.MaxValue - AssetTagsManager.TagSortOrder.KeyStep)
+                    return false;
+                nextKey = lower + AssetTagsManager.TagSortOrder.KeyStep;
+            }
+            else if (hasUpper)
+            {
+                if (upper <= 1UL)
+                    return false;
+                nextKey = upper / 2UL;
+            }
+            else
+            {
+                nextKey = 0x1000UL;
+            }
+
+            row.orderKey = AssetTagsManager.TagSortOrder.FormatOrderKey(nextKey);
+            row.StampOrderUpdate();
+            return true;
+        }
+
         bool TryAssignOrderKeyBetweenNeighbors(int rowIndex, TagInfo row)
         {
             if (row == null || rowIndex < 0 || rowIndex >= tags.Count)
