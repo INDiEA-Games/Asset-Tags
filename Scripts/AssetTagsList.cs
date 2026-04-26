@@ -145,20 +145,39 @@ namespace INDiEA.AssetTags
 
         public void AddTag(string tag) => TryAddTagIfMissing(tag);
 
-        public bool TryAddTagIfMissing(string tag)
+        public bool TryAddTagIfMissing(string tag, IEnumerable<Color> colorsToAvoid = null)
         {
             if (string.IsNullOrWhiteSpace(tag))
                 return false;
             var name = tag.Trim();
             if (HasTag(name))
                 return false;
-            var row = new TagInfo(name, AssetTagsColorUtilities.GenerateTagColor());
+            var row = new TagInfo(name, AssetTagsColorUtilities.GenerateTagColor(GetColorsForNewTag(colorsToAvoid)));
             if (!AssetTagsTagId.IsWellFormed(row.tagId))
                 row.tagId = AssetTagsTagId.NewTagId();
             row.StampTag();
             tags.Add(row);
             AssetTagsManager.TagSortOrder.StampNewTagAtEnd(this, row);
             return true;
+        }
+
+        IEnumerable<Color> GetColorsForNewTag(IEnumerable<Color> extraColors)
+        {
+            if (tags != null)
+            {
+                for (var i = 0; i < tags.Count; i++)
+                {
+                    var tag = tags[i];
+                    if (tag == null || string.IsNullOrWhiteSpace(tag.tagName))
+                        continue;
+                    yield return tag.color;
+                }
+            }
+
+            if (extraColors == null)
+                yield break;
+            foreach (var color in extraColors)
+                yield return color;
         }
 
         public void RemoveTag(string tag) =>

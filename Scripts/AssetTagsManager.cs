@@ -485,7 +485,7 @@ namespace INDiEA.AssetTags
                 return;
             if (mergedViewList == null || !mergedViewList.Contains(normalizedTag))
             {
-                if (localList.TryAddTagIfMissing(normalizedTag))
+                if (localList.TryAddTagIfMissing(normalizedTag, GetKnownTagColors()))
                     RestampTagToMergedTail(normalizedTag);
                 return;
             }
@@ -511,7 +511,7 @@ namespace INDiEA.AssetTags
                 return;
             }
 
-            if (localList.TryAddTagIfMissing(normalizedTag))
+            if (localList.TryAddTagIfMissing(normalizedTag, GetKnownTagColors()))
                 RestampTagToMergedTail(normalizedTag);
         }
 
@@ -547,7 +547,29 @@ namespace INDiEA.AssetTags
                 return true;
             }
 
-            return localList.TryAddTagIfMissing(tag);
+            return localList.TryAddTagIfMissing(tag, GetKnownTagColors());
+        }
+
+        List<Color> GetKnownTagColors()
+        {
+            var colors = new List<Color>();
+
+            void AddFrom(AssetTagsList list)
+            {
+                if (list?.tags == null)
+                    return;
+                for (var i = 0; i < list.tags.Count; i++)
+                {
+                    var tag = list.tags[i];
+                    if (tag == null || string.IsNullOrWhiteSpace(tag.tagName))
+                        continue;
+                    colors.Add(tag.color);
+                }
+            }
+
+            AddFrom(mergedViewList);
+            AddFrom(localList);
+            return colors;
         }
 
         bool TryGetOrderKey(string tag, out string orderKey)
@@ -666,7 +688,7 @@ namespace INDiEA.AssetTags
                 if (!TryNormalizeTag(src.tagName, out var normalizedTag))
                     continue;
                 if (!localList.Contains(normalizedTag))
-                    localList.TryAddTagIfMissing(normalizedTag);
+                    localList.TryAddTagIfMissing(normalizedTag, GetKnownTagColors());
             }
         }
 
@@ -1143,7 +1165,7 @@ namespace INDiEA.AssetTags
                         continue;
 
                     var beforeTags = localList.GetAvailableTags().Count;
-                    localList.AddTag(label);
+                    localList.TryAddTagIfMissing(label, GetKnownTagColors());
                     var addedToList = localList.GetAvailableTags().Count != beforeTags;
 
                     var beforeCount = localData.GetTags(guid, localList).Count;
