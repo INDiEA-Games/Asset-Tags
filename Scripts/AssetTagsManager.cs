@@ -40,6 +40,14 @@ namespace INDiEA.AssetTags
 
         static string ResolveRootFolderPath()
         {
+            return TryResolveInstalledRootFolderPath(out var root)
+                ? root
+                : FallbackRootFolderPath;
+        }
+
+        static bool TryResolveInstalledRootFolderPath(out string root)
+        {
+            root = null;
             try
             {
                 foreach (var scriptAsset in MonoImporter.GetAllRuntimeMonoScripts())
@@ -52,16 +60,30 @@ namespace INDiEA.AssetTags
                     var normalized = scriptPath.Replace('\\', '/');
                     if (!normalized.EndsWith(ManagerScriptFileSuffix, StringComparison.OrdinalIgnoreCase))
                         continue;
-                    var root = normalized.Substring(0, normalized.Length - ManagerScriptFileSuffix.Length);
-                    if (!string.IsNullOrEmpty(root))
-                        return root;
+                    if (!AssetPathExistsOnDisk(normalized))
+                        continue;
+
+                    var candidate = normalized.Substring(0, normalized.Length - ManagerScriptFileSuffix.Length);
+                    if (string.IsNullOrEmpty(candidate))
+                        continue;
+                    if (!AssetDatabase.IsValidFolder(candidate) && !Directory.Exists(AssetPathToFullPathOnDisk(candidate)))
+                        continue;
+
+                    root = candidate;
+                    return true;
                 }
             }
             catch
             {
             }
 
-            return FallbackRootFolderPath;
+            return false;
+        }
+
+        static bool AssetPathExistsOnDisk(string assetPath)
+        {
+            var fullPath = AssetPathToFullPathOnDisk(assetPath);
+            return !string.IsNullOrEmpty(fullPath) && File.Exists(fullPath);
         }
 
         public static string AssetPathToFullPathOnDisk(string assetPath)
@@ -165,6 +187,9 @@ namespace INDiEA.AssetTags
 
         public static void EnsureCoreAssetsExist()
         {
+            if (!TryResolveInstalledRootFolderPath(out var root))
+                return;
+            cachedRootFolderPath = root;
             AssetTagsJsonRepository.EnsureInfrastructure();
             EnsureRootFolderExists();
             EnsureAssetAtPath(SettingsAssetPath, () => ScriptableObject.CreateInstance<AssetTagsSettings>());
@@ -174,6 +199,9 @@ namespace INDiEA.AssetTags
         {
             if (AssetTagsJsonRepository.IsRunningOnAssetImportWorker)
                 return;
+            if (!TryResolveInstalledRootFolderPath(out var root))
+                return;
+            cachedRootFolderPath = root;
 
             if (AssetDatabase.IsValidFolder(RootFolderPath))
                 return;
