@@ -12,7 +12,9 @@
 
 ![Asset Tags Search and Filter](Resources/Screenshot_1.png)
 
-**Asset Tags** is a Unity editor extension designed to create a dedicated classification layer separate from Unity Asset Labels, while still allowing interoperability when needed. It helps teams assign tags to assets, search them quickly in the Project Browser, and maintain collaboration-friendly metadata with JSON persistence.
+**Asset Tags** adds a fast, visual tagging workflow to the Unity Project Browser. It keeps its tags separate from Unity Asset Labels, so you can organize assets with your own colored tags without changing the labels already used by your project.
+
+Use it to classify assets by type, purpose, status, owner, workflow stage, or any category that folders alone cannot express well. With simple `tag:` searches, editable colors, and custom ordering, Asset Tags makes project content easier to find and easier to recognize.
 
 ---
 
@@ -44,7 +46,7 @@
 | 6000.0.23f1 | O        | O   | O    |
 
 - Runtime: Editor-only (`#if UNITY_EDITOR`)
-- [0Harmony](https://github.com/pardeike/Harmony): Search / toolbar integration may rely on **Lib.Harmony** and Unity editor internals; a future Unity version might require an updated asset release if those APIs change.
+- [0Harmony](https://github.com/pardeike/Harmony): Search and toolbar integration may use **Lib.Harmony** and Unity editor internals. If Unity changes those internals in a future version, an Asset Tags update may be required.
 
 ---
 
@@ -59,11 +61,11 @@
 
 ## Key Features
 
-- **Multi-tag assignment** per asset GUID.
-- **Search integration** with `tag:` syntax in Project Browser / search provider.
-- **Tag list management** (name, color, order).
-- **Per-tag metadata tracking** for tag definitions, asset links, ordering, and hidden tag records.
-- **Asset Tags / Labels conversion tools** for interoperability.
+- **Multiple tags per asset**: Add more than one tag to the same asset, so a single item can belong to several categories at once.
+- **Quick Asset Tags popup**: Open the popup from the Project Browser to assign tags, rename them, change colors, reorder the list, or remove unused tags.
+- **Visual tag UI**: Show tags directly in the Project Browser as clear visual elements instead of plain text-only metadata.
+- **Indexed tag search**: Use `tag:<keyword>` in Project Browser search, or `tag:all` to show every tagged asset.
+- **Separate tag layer**: Keep Asset Tags separate from Unity Asset Labels, with conversion tools available when you need them.
 
 ---
 
@@ -80,44 +82,12 @@
 
 ## Team Collaboration Strategy
 
-When multiple developers edit tags at the same time, teams usually face three problems:
-
-1. **Frequent merge conflicts** when everyone writes to one shared tag file  
-2. **Accidental overwrite** of someone else’s edits during rebase/merge  
-3. **Hard-to-trace changes** when there is no per-tag modification metadata  
-
-Asset Tags addresses these issues with a **local-first + metadata-aware merge** structure.
-
-### 1) Local editable files (Git-trackable)
-
-Each client writes only to its own local JSON files:
+Asset Tags stores editable tag data in client-specific JSON files. This helps reduce direct file conflicts when multiple people work in the same project:
 
 - `Assets/INDiEA/Asset Tags/Data/AssetTagsData_<clientId>.json`
 - `Assets/INDiEA/Asset Tags/Data/AssetTagsList_<clientId>.json`
 
-This reduces direct write contention between users and keeps edits scoped per client.
-
-### 2) Global cache as generated runtime state
-
-At runtime, the system also reads cache files from:
-
-- `Library/INDiEA/Asset Tags/Data/AssetTagsData.json`
-- `Library/INDiEA/Asset Tags/Data/AssetTagsList.json`
-- `Library/INDiEA/Asset Tags/Data/ClientId.json`
-
-These files are generated from the local JSON files and are not the normal save target for user edits.
-
-### 3) Merge behavior
-
-The in-memory state is rebuilt from all client JSON files:
-
-- tag definitions use `tagId`, `tagUpdatedAt`, and `tagUpdatedBy`
-- asset-tag links use `tagId`, `linkUpdatedAt`, and `linkUpdatedBy`
-- tag ordering uses `orderKey`, `orderUpdatedAt`, and `orderUpdatedBy`
-- hidden/deleted tag records are stored in `hiddenTags`
-- save operations write to the current client's local JSON only
-
-If `mergeDeletedTagRecords` is enabled, newer `hiddenTags` records can hide older tag definitions and asset-tag links from other clients during merge. In short, this model minimizes team collisions while preserving each user’s latest intent in their own editable source files.
+The merged tag view is rebuilt automatically from those files. User edits are saved to the current client's local data, and generated cache files are kept under `Library/INDiEA/Asset Tags/Data`.
 
 ---
 
@@ -125,19 +95,19 @@ If `mergeDeletedTagRecords` is enabled, newer `hiddenTags` records can hide olde
 
 | Setting | Type | Default | Description |
 | ------- | ---- | ------- | ----------- |
-| `overrideProjectBrowserToolbar` | bool | `true` | Replaces Unity Project Browser toolbar behavior with Asset Tags toolbar integration. |
-| `indexingSearchAfterTagChanges` | bool | `true` | Reindexes Project Browser search results after Asset Tags data changes. |
-| `mergeDeletedTagRecords` | bool | `true` | Applies `hiddenTags` from all clients during merge so newer removals can hide older tag data. |
-| `enableDebugLogs` | bool | `true` | Enables extra debug logs to help inspect toolbar/search and data flow behavior. |
+| `overrideProjectBrowserToolbar` | bool | `true` | Enables the Asset Tags toolbar integration in the Project Browser. |
+| `indexingSearchAfterTagChanges` | bool | `true` | Updates the search index after tag changes. |
+| `mergeDeletedTagRecords` | bool | `true` | Applies tag removal records from other clients during merge. |
+| `enableDebugLogs` | bool | `true` | Prints extra logs for troubleshooting toolbar, search, and data behavior. |
 
 ---
 
 | Button | Description |
 | ------ | ----------- |
-| `Save Current Snapshot to Local Data` | Writes the current merged Asset Tags snapshot to the current client's local JSON files. |
-| `Clear Current Local Data` | Hides all currently known Asset Tags for this client, then clears this client's local tag assignments and tag list entries (with confirmation dialog). |
+| `Save Current Snapshot to Local Data` | Saves the current Asset Tags snapshot to this client's local JSON files. |
+| `Clear Current Local Data` | Hides all currently known tags for this client, then clears this client's local tag data (with confirmation dialog). |
 | `Convert All Asset Tags To Asset Labels` | Copies Asset Tags into Unity Asset Labels for all project assets (with confirmation dialog). |
-| `Convert All Asset Labels To Asset Tags` | Imports Unity Asset Labels into Asset Tags data and tag list (with confirmation dialog). |
+| `Convert All Asset Labels To Asset Tags` | Imports Unity Asset Labels into Asset Tags data (with confirmation dialog). |
 
 ---
 
